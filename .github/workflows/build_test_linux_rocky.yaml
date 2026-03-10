@@ -1,9 +1,6 @@
 name: Build & Test RockyLinux
 
 on:
-  push:
-    branches:
-    - main
   pull_request:
 
 ## Build ##

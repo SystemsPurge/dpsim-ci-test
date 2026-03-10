@@ -1,4 +1,4 @@
-name: Container
+name: net-test
 
 # manually trigger workflow since it takes very long
 on: workflow_dispatch
@@ -11,3 +11,5 @@ jobs:
         run: |
           docker run --rm busybox ping -c 4 8.8.8.8
           docker run --rm busybox nslookup google.com
+      - name: Check MTU
+        run: docker run --rm busybox ip link show eth0
