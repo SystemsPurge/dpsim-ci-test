@@ -1,0 +1,13 @@
+name: Container
+
+# manually trigger workflow since it takes very long
+on: workflow_dispatch
+
+jobs:
+  net-test:
+    runs-on: systemspurge-dpsim-ci-test-runner
+    steps:
+      - name: Debug Network
+        run: |
+          docker run --rm busybox ping -c 4 8.8.8.8
+          docker run --rm busybox nslookup google.com
