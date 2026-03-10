@@ -1,0 +1,29 @@
+FROM fedora:42
+
+LABEL \
+	org.opencontainers.image.title="DPsim" \
+	org.opencontainers.image.licenses="MPL 2.0" \
+	org.opencontainers.image.url="http://dpsim.fein-aachen.org/" \
+	org.opencontainers.image.source="https://github.com/sogno-platform/dpsim"
+
+RUN set -eux; \
+	dnf -y update; \
+	dnf -y remove systemd-standalone-tmpfiles || true; \
+	dnf -y --refresh install \
+		gcc gcc-c++ \
+		git \
+		make cmake pkgconfig \
+		python3-pip \
+		python3-devel \
+		eigen3-devel \
+		spdlog-devel; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade wheel build setuptools packaging && \
+	pip3 install --no-cache-dir -r requirements.txt && \
+	pip3 cache purge
+
+EXPOSE 8888

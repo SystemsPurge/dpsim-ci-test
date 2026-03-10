@@ -1,0 +1,129 @@
+# This Dockerfile is used to build Python wheels for uploading
+# binary releases of DPsim to PyPi.org
+#
+# See: https://github.com/pypa/manylinux
+
+FROM quay.io/pypa/manylinux_2_28_x86_64
+
+ARG CIM_VERSION=CGMES_2.4.15_16FEB2016
+ARG CIMPP_COMMIT=051ee4c311572fe92b30120b897d22deb253e162
+ARG VILLAS_VERSION=5606793aaee2d1eeb663180d3e52718fa8bd5931
+
+ARG CMAKE_OPTS
+ARG MAKE_OPTS=-j4
+
+ENV PLAT=manylinux_2_28_x86_64
+
+LABEL \
+	org.opencontainers.image.title="DPsim" \
+	org.opencontainers.image.licenses="MPL 2.0" \
+	org.opencontainers.image.url="http://dpsim.fein-aachen.org/" \
+	org.opencontainers.image.source="https://github.com/sogno-platform/dpsim"
+
+RUN dnf -y update
+RUN dnf install -y epel-release
+
+# Toolchain
+RUN dnf install -y \
+	gcc-toolset-14 \
+	git wget \
+	rpmdevtools rpm-build \
+	make cmake pkgconfig libtool \
+	autoconf automake autogen libtool flex bison \
+	python3-pip \
+	cppcheck \
+	ninja-build \
+	meson
+
+# Tools needed for development
+RUN dnf -y install \
+	doxygen graphviz \
+	gdb \
+	procps-ng
+
+# Dependencies
+RUN dnf --refresh -y install \
+	python3-devel \
+	eigen3-devel \
+	libxml2-devel \
+	graphviz-devel
+
+# Install some debuginfos
+RUN dnf -y debuginfo-install \
+	python3
+
+# Build & Install sundials
+RUN cd /tmp && \
+	git clone --branch v3.2.1 --recurse-submodules https://github.com/LLNL/sundials.git && \
+	mkdir -p sundials/build && cd sundials/build && \
+	cmake ${CMAKE_OPTS} .. \
+		-DBUILD_SHARED_LIBS=ON \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_POLICY_VERSION_MINIMUM=3.5 && \
+	make ${MAKE_OPTS} install
+
+# Python dependencies
+ADD requirements-manylinux.txt .
+RUN pip3 install --upgrade wheel build setuptools packaging
+RUN pip3 install -r requirements-manylinux.txt
+
+# Install CIMpp from source
+RUN cd /tmp && \
+	git clone https://github.com/sogno-platform/libcimpp.git && \
+	mkdir -p libcimpp/build && cd libcimpp/build && \
+	git checkout ${CIMPP_COMMIT} && \
+	git submodule update --init && \
+	cmake ${CMAKE_OPTS} .. \
+		-DUSE_CIM_VERSION=${CIM_VERSION} \
+		-DBUILD_SHARED_LIBS=ON \
+		-DBUILD_ARABICA_EXAMPLES=OFF && \
+	make ${MAKE_OPTS} install && \
+	rm -rf /tmp/libcimpp
+
+# Install VILLASnode dependencies
+RUN dnf install -y \
+	jansson-devel \
+	libconfig-devel \
+	libcurl-devel \
+	libibverbs-devel \
+	libmodbus-devel \
+	libnice-devel \
+	libnl3-devel \
+	librdkafka-devel \
+	librdmacm-devel \
+	libusb-devel \
+	libuuid-devel \
+	lua-devel \
+	mosquitto-devel \
+	openssl-devel \
+	protobuf-c-devel \
+	protobuf-devel \
+	nanomsg-devel \
+	zeromq-devel \
+	graphviz-devel \
+	git-svn \
+	subversion \
+	subversion-perl \
+	perl-Memoize
+
+# Install VILLASnode from source
+RUN cd /tmp && \
+	git clone --recurse-submodules https://github.com/VILLASframework/node.git villas-node && \
+	cd villas-node && \
+	git checkout ${VILLAS_VERSION} && \
+	DEPS_SKIP=criterion,ethercat \
+	MAKE_OPTS="" \
+	CMAKE_OPTS=-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+	NINJA=/usr/bin/ninja-build \
+	bash packaging/deps.sh && \
+	mkdir -p build && cd build && \
+	cmake ${CMAKE_OPTS} .. \
+		-DCMAKE_POLICY_VERSION_MINIMUM=3.5 && \
+	make ${MAKE_OPTS} install && \
+	rm -rf /tmp/villas-node
+
+	# Fix OpenDSSC library path
+	RUN if [ -f /usr/local/openDSSC/bin/libOpenDSSC.so ]; then \
+		mkdir -p /usr/lib64; \
+		ln -sf /usr/local/openDSSC/bin/libOpenDSSC.so /usr/lib64/libOpenDSSC.so; \
+	fi

@@ -1,0 +1,7 @@
+# Author: Steffen Vogel <steffen.vogel@opal-rt.com>
+# SPDX-FileCopyrightText: 2024 OPAL-RT Germany GmbH
+# SPDX-License-Identifier: MPL-2.0
+---
+BasedOnStyle: LLVM
+
+ReflowComments: false

@@ -1,0 +1,69 @@
+# sogno/dpsim:dev is built by dpsim-git/packaging/Docker/Dockerfile.dev
+ARG BASE_IMAGE=sogno/dpsim:dev
+
+FROM ${BASE_IMAGE} AS builder
+
+ARG CMAKE_OPTS
+ARG MAKE_OPTS=-j4
+
+COPY . /dpsim/
+
+RUN rm -rf /dpsim/build && mkdir /dpsim/build
+WORKDIR /dpsim/build
+
+RUN cmake ${CMAKE_OPTS} .. \
+	-DDPSIM_BUILD_EXAMPLES=OFF
+	-DCPACK_GENERATOR=RPM
+RUN make ${MAKE_OPTS} package
+
+FROM fedora:42
+
+LABEL \
+	org.opencontainers.image.title="DPsim" \
+	org.opencontainers.image.licenses="MPL 2.0" \
+	org.opencontainers.image.url="http://dpsim.fein-aachen.org/" \
+	org.opencontainers.image.source="https://github.com/sogno-platform/dpsim"
+
+RUN set -eux; \
+	dnf -y update; \
+	dnf -y remove systemd-standalone-tmpfiles || true; \
+	dnf -y --refresh install \
+		python3-pip \
+		findutils; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+COPY --from=builder /dpsim/build/*.rpm /tmp
+RUN set -eux; \
+	dnf -y install /tmp/*.rpm; \
+	rm -f /tmp/*.rpm; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+COPY requirements.txt .
+COPY requirements-jupyter.txt .
+RUN pip3 install --no-cache-dir --upgrade wheel build setuptools packaging && \
+	pip3 install --no-cache-dir -r requirements.txt && \
+	pip3 install --no-cache-dir -r requirements-jupyter.txt && \
+	pip3 cache purge
+
+RUN set -eux; \
+	dnf -y --refresh install npm; \
+	jupyter nbextension enable --py widgetsnbextension; \
+	jupyter labextension install @jupyter-widgets/jupyterlab-manager; \
+	dnf -y remove npm; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+# Copy example materials
+RUN mkdir dpsim
+COPY --from=builder /dpsim/examples /dpsim/
+RUN find /dpsim \
+	-name conftest.py -o \
+	-name "*.yml" -o \
+	-name CMakeLists.txt \
+	-exec rm {} \;
+
+WORKDIR /dpsim
+EXPOSE 8888
+CMD [ "jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser", "--LabApp.token=3adaa57df44cea75e60c0169e1b2a98ae8f7de130481b5bc" ]

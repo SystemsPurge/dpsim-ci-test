@@ -1,0 +1,10 @@
+# Generated files
+*.csv
+*.log
+*.o
+
+libdpsim.dylib
+libdpsim.so*
+libdpsim.dll
+dpsim.so
+dpsim.pyd

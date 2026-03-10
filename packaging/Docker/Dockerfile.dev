@@ -1,0 +1,128 @@
+FROM fedora:42 AS base
+
+ARG CIM_VERSION=CGMES_2.4.15_16FEB2016
+ARG LIBCIMPP_VERSION=2.2.0
+ARG CIMPP_COMMIT=051ee4c311572fe92b30120b897d22deb253e162
+ARG VILLAS_VERSION=5606793aaee2d1eeb663180d3e52718fa8bd5931
+
+ARG CMAKE_OPTS
+ARG MAKE_OPTS=-j4
+
+LABEL \
+	org.opencontainers.image.title="DPsim" \
+	org.opencontainers.image.licenses="MPL 2.0" \
+	org.opencontainers.image.url="http://dpsim.fein-aachen.org/" \
+	org.opencontainers.image.source="https://github.com/sogno-platform/dpsim"
+
+RUN set -eux; \
+	dnf -y update; \
+	dnf -y remove systemd-standalone-tmpfiles || true; \
+	dnf -y --refresh install \
+		gcc gcc-c++ clang \
+		git \
+		rpmdevtools rpm-build \
+		make cmake pkgconfig \
+		python3-pip \
+		curl \
+		cppcheck \
+		flex bison \
+		protobuf-compiler protobuf-c-compiler \
+		clang-tools-extra \
+		doxygen graphviz \
+		gdb \
+		procps-ng \
+		python3-devel \
+		eigen3-devel \
+		libxml2-devel \
+		graphviz-devel \
+		spdlog-devel \
+		fmt-devel \
+		openssl-devel \
+		libuuid-devel \
+		libcurl-devel \
+		jansson-devel \
+		libwebsockets-devel \
+		mosquitto-devel \
+		libconfig-devel \
+		libnl3-devel \
+		protobuf-devel \
+		protobuf-c-devel \
+		libre-devel; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+# Build & Install sundials
+RUN cd /tmp && \
+	git clone --branch v3.2.1 --recurse-submodules --depth 1 https://github.com/LLNL/sundials.git && \
+	mkdir -p sundials/build && cd sundials/build && \
+	cmake ${CMAKE_OPTS} .. \
+		-DCMAKE_BUILD_TYPE=Release && \
+	make ${MAKE_OPTS} install
+
+# CIMpp and VILLASnode are installed here
+ENV LD_LIBRARY_PATH="/usr/local/lib64:${LD_LIBRARY_PATH}"
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade wheel build setuptools packaging && \
+	pip3 install --no-cache-dir -r requirements.txt && \
+	pip3 cache purge
+
+# Install libcimpp from prebuilt RPMs
+RUN set -eux; \
+	case "${CIM_VERSION}" in \
+		CGMES_2.4.15_16FEB2016|CGMES_2.4.15_27JAN2020|CGMES_2.4.13_18DEC2013) \
+			libcimpp_pkg="libcimpp_${CIM_VERSION}-${LIBCIMPP_VERSION}-Linux.rpm" ;; \
+		*) \
+			echo "Unsupported CIM_VERSION '${CIM_VERSION}' for prebuilt libcimpp package" >&2; \
+			exit 1 ;; \
+	esac; \
+	libcimpp_url="https://github.com/sogno-platform/libcimpp/releases/download/release%2Fv${LIBCIMPP_VERSION}/${libcimpp_pkg}"; \
+	curl -sSL "${libcimpp_url}" -o /tmp/libcimpp.rpm; \
+	dnf -y install /tmp/libcimpp.rpm; \
+	rm -f /tmp/libcimpp.rpm; \
+	ldconfig; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+# Install VILLASnode from source (with fpga support)
+RUN cd /tmp && \
+	git clone --recurse-submodules https://github.com/VILLASframework/node.git villas-node && \
+	mkdir -p villas-node/build && cd villas-node/build && \
+	git checkout ${VILLAS_VERSION} && \
+	cmake ${CMAKE_OPTS} .. \
+		-DCMAKE_INSTALL_LIBDIR=/usr/local/lib64 \
+		-DCMAKE_BUILD_TYPE=Release && \
+	make ${MAKE_OPTS} install && \
+	rm -rf /tmp/villas-node
+
+# Remove this part in the future and use dedicated Jupyter Dockerfile
+RUN set -eux; \
+	dnf -y --refresh install npm; \
+	pip3 install --no-cache-dir \
+		jupyter \
+		jupyterlab \
+		jupyter_contrib_nbextensions \
+		nbconvert \
+		nbformat; \
+	pip3 cache purge; \
+	dnf -y remove npm; \
+	dnf clean all; \
+	rm -rf /var/cache/dnf /var/cache/yum
+
+EXPOSE 8888
+
+# Target for vscode dev container
+FROM base AS dev-vscode
+
+# Create a non-root user for vscode to use
+ARG USERNAME=dpsim
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME && \
+	useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
+	echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+	chmod 0440 /etc/sudoers.d/$USERNAME
+
+FROM base

@@ -1,0 +1,169 @@
+FROM rockylinux:9
+
+ARG CIM_VERSION=CGMES_2.4.15_16FEB2016
+ARG CIMPP_COMMIT=051ee4c311572fe92b30120b897d22deb253e162
+ARG VILLAS_VERSION=5606793aaee2d1eeb663180d3e52718fa8bd5931
+
+ARG CMAKE_OPTS
+ARG MAKE_OPTS=-j4
+
+LABEL \
+	org.opencontainers.image.title="DPsim" \
+	org.opencontainers.image.licenses="MPL 2.0" \
+	org.opencontainers.image.url="http://dpsim.fein-aachen.org/" \
+	org.opencontainers.image.source="https://github.com/sogno-platform/dpsim"
+
+RUN dnf -y update && \
+	dnf install -y epel-release dnf-plugins-core && \
+	dnf install -y https://rpms.remirepo.net/enterprise/remi-release-9.rpm && \
+	dnf config-manager --set-enabled crb && \
+	dnf config-manager --set-enabled remi
+
+# CUDA dependencies
+RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo && \
+	dnf --refresh -y install cuda-compiler-11-7 cuda-libraries-devel-11-7 cuda-nvprof-11-7 && \
+	ln -s cuda-11.7 /usr/local/cuda
+
+ENV PATH="/usr/local/cuda/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
+
+# Toolchain
+RUN dnf -y install \
+	git clang gdb ccache \
+	redhat-rpm-config \
+	rpmdevtools \
+	make cmake ninja-build \
+	doxygen \
+	graphviz \
+	pandoc \
+	python3-pip \
+	pkg-config \
+	wget \
+	libarchive \
+	openblas-devel \
+	gcc-gfortran \
+	coreutils-single \
+	glib2-devel
+
+# Dependencies
+RUN dnf --refresh -y install \
+	python3-devel \
+	eigen3-devel \
+	libxml2-devel \
+	graphviz-devel \
+	gsl-devel
+
+# VILLASnode dependencies
+RUN dnf -y install \
+	openssl-devel \
+	libuuid-devel \
+	libconfig-devel \
+	libwebsockets-devel \
+	libnl3-devel \
+	libcurl-devel \
+	jansson-devel \
+	mosquitto-devel \
+	libjpeg-devel \
+	zlib-devel \
+	protobuf-c-devel \
+	protobuf-devel \
+	libmodbus-devel \
+	librdkafka-devel \
+	zeromq-devel \
+	libusb-devel \
+	lua-devel \
+	nanomsg-devel \
+	git-svn
+
+# CUDARPC and dependencies
+RUN dnf install -y \
+	make bash git gcc autoconf libtool automake \
+	ncurses-devel zlib-devel binutils-devel mesa-libGL-devel \
+	libvdpau-devel mesa-libEGL-devel openssl-devel rpcbind \
+	rpcgen texinfo bison flex
+
+ENV LD_LIBRARY_PATH="/usr/local/lib:/usr/local/lib64:${LD_LIBRARY_PATH}"
+RUN git clone --branch 3.0 --recurse-submodules --depth 1 https://git.rwth-aachen.de/acs/public/virtualization/cricket.git && \
+	cd cricket && \
+	make ${MAKE_OPTS} libtirpc && \
+	make ${MAKE_OPTS} bin/libtirpc.so && \
+	make ${MAKE_OPTS} bin/libtirpc.so.3 && \
+	make ${MAKE_OPTS} bin/cricket-client.so LOG=INFO
+
+ENV PATH="$PWD/cricket/bin:${PATH}"
+ENV LD_LIBRARY_PATH="$PWD/cricket/bin:${LD_LIBRARY_PATH}"
+
+# Profiling dependencies
+RUN dnf -y install \
+	graphviz \
+	libasan \
+	cppcheck \
+	gnuplot \
+	qt5-qtbase qt5-qtsvg
+RUN pip3 install gprof2dot
+
+# Build & Install sundials
+RUN cd /tmp && \
+	git clone --branch v3.2.1 --recurse-submodules --depth 1 https://github.com/LLNL/sundials.git && \
+	mkdir -p sundials/build && cd sundials/build && \
+	cmake ${CMAKE_OPTS} .. \
+		-DCMAKE_BUILD_TYPE=Release && \
+	make ${MAKE_OPTS} install
+
+# Install CIMpp from source
+RUN cd /tmp && \
+	git clone https://github.com/sogno-platform/libcimpp.git && \
+	mkdir -p libcimpp/build && cd libcimpp/build && \
+	git checkout ${CIMPP_COMMIT} && \
+	git submodule update --init && \
+	cmake ${CMAKE_OPTS} ..\
+		-DCMAKE_INSTALL_LIBDIR=/usr/local/lib64 \
+		-DUSE_CIM_VERSION=${CIM_VERSION} \
+		-DBUILD_SHARED_LIBS=ON \
+		-DBUILD_ARABICA_EXAMPLES=OFF && \
+	make ${MAKE_OPTS} install && \
+	rm -rf /tmp/libcimpp
+
+# Install MAGMA from source
+RUN cd /tmp && \
+	wget http://icl.utk.edu/projectsfiles/magma/downloads/magma-2.6.0.tar.gz && \
+	tar -xvzf magma-2.6.0.tar.gz && \
+	mkdir -p magma-2.6.0/build && cd magma-2.6.0/build && \
+	cmake ${CMAKE_OPTS} .. \
+		-DMAGMA_ENABLE_CUDA=ON \
+		-DCMAKE_INSTALL_PREFIX=/ \
+		-DGPU_TARGET='Pascal Turing Ampere' \
+		-DBUILD_SHARED_LIBS=on && \
+	make ${MAKE_OPTS} install && rm -rf /tmp/magma-2.6.0
+
+# Install VILLASnode and deps from source
+ENV CMAKE_OPTS="${CMAKE_OPTS} \
+		-DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+		-DCMAKE_CUDA_ARCHITECTURES=60;61;70;75"
+
+RUN cd /tmp && \
+		git clone --recurse-submodules https://github.com/VILLASframework/node.git villas-node && \
+		cd villas-node && \
+		git checkout ${VILLAS_VERSION} && \
+		# libxil is currently not working in the VILLASnode installer script, skip and use submodule for FPGA support
+		env MAKE_OPTS="" DEPS_NONINTERACTIVE=1 DEPS_SKIP=libxil bash packaging/deps.sh && \
+		mkdir -p build && cd build && \
+		cmake ${CMAKE_OPTS} .. \
+			-DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS -fpermissive" \
+			-DCMAKE_INSTALL_LIBDIR=/usr/local/lib64 \
+			-DCMAKE_CUDA_FLAGS="-Xcompiler=-Wall,-Werror" && \
+		make ${MAKE_OPTS} install && \
+		rm -rf /tmp/villas-node
+
+# CIMpp and VILLASnode are installed here
+ENV LD_LIBRARY_PATH="/usr/local/lib64:${LD_LIBRARY_PATH}"
+
+# This is a hack: the VILLASnode build system does not install the libraries in the correct location for OpenDSS
+RUN echo "/usr/local/openDSSC/bin" > /etc/ld.so.conf.d/opendssc.conf && \
+	ldconfig
+
+# Python dependencies
+COPY requirements.txt requirements.txt
+RUN pip3 install --upgrade wheel build setuptools packaging && pip3 install -r requirements.txt
+
+EXPOSE 8888
