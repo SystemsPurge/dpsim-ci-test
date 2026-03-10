@@ -28,7 +28,7 @@ docker build -t soullessblob/dpsim-ci-test:dev -f packaging/Docker/Dockerfile.de
 Alternatively, the image can be pulled from DockerHub like so
 
 ```shell
-docker pull soullessblob/dpsim-ci-test:dev
+docker pull sogno/dpsim:dev
 ```
 
 For OS specific instructions on how to install requirements, see the sections below.

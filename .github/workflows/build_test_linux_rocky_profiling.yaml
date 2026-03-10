@@ -7,7 +7,7 @@ jobs:
   profiling:
     name: Build with Profiling options
     runs-on: systemspurge-dpsim-ci-test-runner
-    container: soullessblob/dpsim-ci-test:dev-rocky
+    container: sogno/dpsim:dev-rocky
     steps:
       - name: Checkout
         uses: actions/checkout@v4
