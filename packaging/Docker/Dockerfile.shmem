@@ -1,5 +1,5 @@
-# sogno/dpsim:dev is built by dpsim-git/packaging/Docker/Dockerfile.dev
-ARG BASE_IMAGE=sogno/dpsim:dev
+# soullessblob/dpsim-ci-test:dev is built by dpsim-git/packaging/Docker/Dockerfile.dev
+ARG BASE_IMAGE=soullessblob/dpsim-ci-test:dev
 
 FROM ${BASE_IMAGE}
 

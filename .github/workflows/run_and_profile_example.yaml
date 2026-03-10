@@ -16,7 +16,7 @@ jobs:
   profiling-examples:
     name: Run example with profiling
     runs-on: systemspurge-dpsim-ci-test-runner
-    container: sogno/dpsim:dev-rocky
+    container: soullessblob/dpsim-ci-test:dev-rocky
     steps:
       - name: Restore Cache
         uses: actions/cache@v4

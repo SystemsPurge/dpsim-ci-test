@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   dpsim:
-    image: sogno/dpsim:dev
+    image: soullessblob/dpsim-ci-test:dev
     environment:
       PYTHONPATH: /dpsim/build
     ports:

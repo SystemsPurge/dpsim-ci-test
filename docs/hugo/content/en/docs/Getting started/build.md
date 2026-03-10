@@ -22,13 +22,13 @@ In the repository, there is a Docker file with all required dependencies
 
 ```shell
 cd dpsim
-docker build -t sogno/dpsim:dev -f packaging/Docker/Dockerfile.dev .
+docker build -t soullessblob/dpsim-ci-test:dev -f packaging/Docker/Dockerfile.dev .
 ```
 
 Alternatively, the image can be pulled from DockerHub like so
 
 ```shell
-docker pull sogno/dpsim:dev
+docker pull soullessblob/dpsim-ci-test:dev
 ```
 
 For OS specific instructions on how to install requirements, see the sections below.
@@ -37,7 +37,7 @@ Next, run a Docker container
 
 ```shell
 cd dpsim
-docker run -it -p 8888:8888 -v $(pwd):/dpsim --privileged sogno/dpsim:dev bash
+docker run -it -p 8888:8888 -v $(pwd):/dpsim --privileged soullessblob/dpsim-ci-test:dev bash
 ```
 
 The option `-p` maps the port 8888 of the container to the docker host. This is required to access the jupyter lab instance inside the container. The option `--privileged` is required for debug builds.
@@ -45,7 +45,7 @@ The option `-p` maps the port 8888 of the container to the docker host. This is 
 For Windows, you might need to specify the current directory with curly brackets
 
 ```shell
-docker run -it -p 8888:8888 -v ${pwd}:/dpsim --privileged sogno/dpsim:dev bash
+docker run -it -p 8888:8888 -v ${pwd}:/dpsim --privileged soullessblob/dpsim-ci-test:dev bash
 ```
 
 Now, you should be in an interactive session inside the docker container.

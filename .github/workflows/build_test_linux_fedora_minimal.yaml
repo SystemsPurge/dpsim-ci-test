@@ -12,7 +12,7 @@ jobs:
   linux-fedora-minimal:
     name: Build with minimal configuration on Fedora Linux
     runs-on: systemspurge-dpsim-ci-test-runner
-    container: sogno/dpsim:dev-minimal
+    container: soullessblob/dpsim-ci-test:dev-minimal
     steps:
     - name: Checkout
       uses: actions/checkout@v4

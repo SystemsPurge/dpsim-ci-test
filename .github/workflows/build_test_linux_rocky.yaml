@@ -12,7 +12,7 @@ jobs:
   linux-rocky:
     name: Build on Rocky Linux
     runs-on: systemspurge-dpsim-ci-test-runner
-    container: sogno/dpsim:dev-rocky
+    container: soullessblob/dpsim-ci-test:dev-rocky
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
   linux-rocky-clang:
     name: Build on Rocky Linux using Clang
     runs-on: systemspurge-dpsim-ci-test-runner
-    container: sogno/dpsim:dev-rocky
+    container: soullessblob/dpsim-ci-test:dev-rocky
     steps:
     - name: Checkout
       uses: actions/checkout@v4
