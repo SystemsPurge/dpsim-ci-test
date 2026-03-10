@@ -3,7 +3,7 @@ name: Build & Test RockyLinux
 on:
   push:
     branches:
-    - master
+    - main
   pull_request:
 
 ## Build ##
@@ -11,7 +11,7 @@ on:
 jobs:
   linux-rocky:
     name: Build on Rocky Linux
-    runs-on: ubuntu-latest
+    runs-on: systemspurge-dpsim-ci-test-runner
     container: sogno/dpsim:dev-rocky
     steps:
     - name: Checkout
@@ -40,7 +40,7 @@ jobs:
 
   linux-rocky-clang:
     name: Build on Rocky Linux using Clang
-    runs-on: ubuntu-latest
+    runs-on: systemspurge-dpsim-ci-test-runner
     container: sogno/dpsim:dev-rocky
     steps:
     - name: Checkout
